@@ -145,8 +145,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="重置默认"
-                android:layout_marginStart="8dp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                android:layout_marginStart="8dp" />
 
         </LinearLayout>
 
