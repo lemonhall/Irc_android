@@ -56,7 +56,10 @@ class HomeFragment : Fragment() {
      * 设置 RecyclerView
      */
     private fun setupRecyclerView() {
-        messageAdapter = ChatMessageAdapter()
+        messageAdapter = ChatMessageAdapter { messageId ->
+            // 点击服务器消息时切换展开/折叠状态
+            homeViewModel.toggleServerMessage(messageId)
+        }
         recyclerMessages.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = messageAdapter

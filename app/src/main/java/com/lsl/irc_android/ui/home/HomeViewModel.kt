@@ -38,6 +38,11 @@ class HomeViewModel : ViewModel() {
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val channelListBuffer = mutableListOf<ChannelInfo>()
     
+    // MOTD 和服务器消息收集
+    private val serverMessageBuffer = mutableListOf<String>()
+    private var isCollectingMotd = false
+    private var serverMessageId: Long? = null
+    
     fun connect(server: String, port: Int, nickname: String) {
         _connectionState.value = ConnectionState.CONNECTING
         _statusMessage.value = "正在连接到 $server:$port..."
@@ -196,13 +201,47 @@ class HomeViewModel : ViewModel() {
         val text = message.trailing
         
         when (code) {
+            // RPL_WELCOME - 开始收集服务器消息
             1 -> {
-                addSystemMessage("[+] 欢迎: $text")
+                isCollectingMotd = true
+                serverMessageBuffer.clear()
+                serverMessageBuffer.add("欢迎: $text")
                 _statusMessage.postValue("已登录")
+            }
+            // RPL_YOURHOST, RPL_CREATED, RPL_MYINFO, RPL_ISUPPORT
+            2, 3, 4, 5 -> {
+                if (isCollectingMotd && text.isNotBlank()) {
+                    serverMessageBuffer.add(text)
+                }
+            }
+            // RPL_MOTDSTART - MOTD 开始
+            375 -> {
+                isCollectingMotd = true
+                if (text.isNotBlank()) {
+                    serverMessageBuffer.add(text)
+                }
+            }
+            // RPL_MOTD - MOTD 内容
+            372 -> {
+                if (isCollectingMotd && text.isNotBlank()) {
+                    serverMessageBuffer.add(text)
+                }
+            }
+            // RPL_ENDOFMOTD - MOTD 结束，显示折叠消息
+            376 -> {
+                if (isCollectingMotd && text.isNotBlank()) {
+                    serverMessageBuffer.add(text)
+                }
+                finishServerMessages()
+            }
+            // RPL_LUSERCLIENT, RPL_LUSEROP, RPL_LUSERCHANNELS, etc.
+            251, 252, 253, 254, 255 -> {
+                if (isCollectingMotd && text.isNotBlank()) {
+                    serverMessageBuffer.add(text)
+                }
             }
             322 -> {
                 // RPL_LIST - 频道列表项
-                // :server 322 nickname #channel usercount :topic
                 if (message.params.size >= 3) {
                     val channel = message.params[1]
                     val userCount = message.params[2].toIntOrNull() ?: 0
@@ -216,29 +255,91 @@ class HomeViewModel : ViewModel() {
                 addSystemMessage("[频道] 找到 ${channelListBuffer.size} 个频道")
             }
             332 -> {
+                // RPL_TOPIC - 频道话题
                 if (message.params.size >= 2) {
                     val channel = message.params[1]
-                    addSystemMessage("[话题] $channel 话题: $text")
+                    addSystemMessage("📌 $channel 话题: $text")
                 }
             }
             353 -> {
-                if (message.params.size >= 3) {
-                    val channel = message.params[2]
-                    addSystemMessage("[用户] $channel 用户: $text")
-                }
+                // RPL_NAMREPLY - 用户列表（不显示，太长）
+                // 可以在这里收集，但不显示在聊天区
             }
             366 -> {
+                // RPL_ENDOFNAMES - 用户列表结束
                 if (message.params.size >= 2) {
                     val channel = message.params[1]
                     _statusMessage.postValue("在 $channel 中")
+                    addSystemMessage("✅ 已加入 $channel")
                 }
             }
             else -> {
-                if (text.isNotBlank()) {
-                    addSystemMessage("[$code] $text")
+                // 其他数字响应码，如果在收集 MOTD 期间则添加
+                if (isCollectingMotd && text.isNotBlank() && code < 400) {
+                    serverMessageBuffer.add("[$code] $text")
                 }
             }
         }
+    }
+    
+    /**
+     * 完成服务器消息收集，显示为折叠消息
+     */
+    private fun finishServerMessages() {
+        isCollectingMotd = false
+        
+        if (serverMessageBuffer.isEmpty()) {
+            return
+        }
+        
+        val currentList = _messages.value ?: mutableListOf()
+        val messageId = System.currentTimeMillis()
+        serverMessageId = messageId
+        
+        currentList.add(
+            ChatMessage(
+                id = messageId,
+                sender = "服务器",
+                message = "📋 服务器欢迎消息 (点击展开 ${serverMessageBuffer.size} 条)",
+                timestamp = dateFormat.format(Date()),
+                isSystemMessage = true,
+                isServerMessage = true,
+                isExpandable = true,
+                isExpanded = false,
+                detailMessages = serverMessageBuffer.toList()
+            )
+        )
+        _messages.postValue(currentList)
+    }
+    
+    /**
+     * 切换服务器消息的展开/折叠状态
+     */
+    fun toggleServerMessage(messageId: Long) {
+        val currentList = _messages.value ?: return
+        val index = currentList.indexOfFirst { it.id == messageId }
+        if (index == -1) return
+        
+        val message = currentList[index]
+        if (!message.isExpandable) return
+        
+        val updatedMessage = if (message.isExpanded) {
+            // 折叠
+            message.copy(
+                message = "📋 服务器欢迎消息 (点击展开 ${message.detailMessages?.size ?: 0} 条)",
+                isExpanded = false
+            )
+        } else {
+            // 展开
+            val details = message.detailMessages?.joinToString("\n") ?: ""
+            message.copy(
+                message = "📋 服务器欢迎消息 (点击折叠):\n\n$details",
+                isExpanded = true
+            )
+        }
+        
+        currentList[index] = updatedMessage
+        _messages.postValue(currentList)
     }
     
     private fun addMessage(sender: String, message: String, isSystem: Boolean = false) {

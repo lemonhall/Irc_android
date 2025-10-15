@@ -12,21 +12,26 @@ import com.lsl.irc_android.R
 /**
  * 聊天消息适配器
  */
-class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageViewHolder>(
+class ChatMessageAdapter(
+    private val onServerMessageClick: ((Long) -> Unit)? = null
+) : ListAdapter<ChatMessage, ChatMessageAdapter.MessageViewHolder>(
     MessageDiffCallback()
 ) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_chat_message, parent, false)
-        return MessageViewHolder(view)
+        return MessageViewHolder(view, onServerMessageClick)
     }
 
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         holder.bind(getItem(position))
     }
 
-    class MessageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    class MessageViewHolder(
+        itemView: View,
+        private val onServerMessageClick: ((Long) -> Unit)?
+    ) : RecyclerView.ViewHolder(itemView) {
         private val textSender: TextView = itemView.findViewById(R.id.text_sender)
         private val textMessage: TextView = itemView.findViewById(R.id.text_message)
         private val textTime: TextView = itemView.findViewById(R.id.text_time)
@@ -43,6 +48,19 @@ class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageVi
             } else {
                 textSender.alpha = 1.0f
                 textMessage.alpha = 1.0f
+            }
+            
+            // 服务器消息可点击展开/折叠
+            if (message.isExpandable) {
+                itemView.setOnClickListener {
+                    onServerMessageClick?.invoke(message.id)
+                }
+                itemView.isClickable = true
+                itemView.isFocusable = true
+            } else {
+                itemView.setOnClickListener(null)
+                itemView.isClickable = false
+                itemView.isFocusable = false
             }
         }
     }
@@ -66,5 +84,9 @@ data class ChatMessage(
     val sender: String,
     val message: String,
     val timestamp: String,
-    val isSystemMessage: Boolean = false
+    val isSystemMessage: Boolean = false,
+    val isServerMessage: Boolean = false,  // 服务器 MOTD/欢迎消息
+    val isExpandable: Boolean = false,     // 是否可展开
+    val isExpanded: Boolean = false,       // 是否已展开
+    val detailMessages: List<String>? = null  // 详细消息列表
 )
