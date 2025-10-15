@@ -1,5 +1,8 @@
 package com.lsl.irc_android.ui.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -7,6 +10,9 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -24,6 +30,17 @@ class HomeFragment : Fragment() {
     private lateinit var btnSend: Button
     private lateinit var textCurrentChannel: TextView
     private lateinit var recyclerMessages: RecyclerView
+    
+    // 通知权限请求
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(context, "通知权限已授予", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "通知权限被拒绝，将无法收到提及通知", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -38,8 +55,38 @@ class HomeFragment : Fragment() {
         setupRecyclerView()
         setupButtons()
         setupObservers()
+        requestNotificationPermission()
         
         return root
+    }
+    
+    /**
+     * 请求通知权限 (Android 13+)
+     */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // 已有权限
+                }
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
+                    // 显示说明
+                    Toast.makeText(
+                        context,
+                        "需要通知权限来提醒你被提及的消息",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                else -> {
+                    // 直接请求权限
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
     }
     
     /**
@@ -154,5 +201,11 @@ class HomeFragment : Fragment() {
                 btnSend.isEnabled = false
             }
         }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // 当用户查看聊天页面时，清除所有通知
+        homeViewModel.clearNotifications()
     }
 }

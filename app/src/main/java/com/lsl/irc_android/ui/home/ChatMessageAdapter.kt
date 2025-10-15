@@ -45,9 +45,19 @@ class ChatMessageAdapter(
             if (message.isSystemMessage) {
                 textSender.alpha = 0.6f
                 textMessage.alpha = 0.6f
-            } else {
+                textSender.setTextColor(itemView.context.getColor(android.R.color.darker_gray))
+            } else if (message.isOwnMessage) {
+                // 自己的消息用醒目的颜色
                 textSender.alpha = 1.0f
                 textMessage.alpha = 1.0f
+                textSender.setTextColor(itemView.context.getColor(android.R.color.holo_blue_dark))
+                textSender.setTypeface(null, android.graphics.Typeface.BOLD)
+            } else {
+                // 其他人的消息用默认颜色
+                textSender.alpha = 1.0f
+                textMessage.alpha = 1.0f
+                textSender.setTextColor(itemView.context.getColor(android.R.color.black))
+                textSender.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
             
             // 服务器消息可点击展开/折叠
@@ -88,5 +98,6 @@ data class ChatMessage(
     val isServerMessage: Boolean = false,  // 服务器 MOTD/欢迎消息
     val isExpandable: Boolean = false,     // 是否可展开
     val isExpanded: Boolean = false,       // 是否已展开
-    val detailMessages: List<String>? = null  // 详细消息列表
+    val detailMessages: List<String>? = null,  // 详细消息列表
+    val isOwnMessage: Boolean = false      // 是否是自己发送的消息
 )

@@ -1,16 +1,18 @@
 package com.lsl.irc_android.ui.home
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lsl.irc_android.irc.IrcClient
 import com.lsl.irc_android.irc.IrcMessage
+import com.lsl.irc_android.notification.NotificationHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _connectionState = MutableLiveData<ConnectionState>().apply {
         value = ConnectionState.DISCONNECTED
@@ -37,6 +39,9 @@ class HomeViewModel : ViewModel() {
     private var ircClient: IrcClient? = null
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val channelListBuffer = mutableListOf<ChannelInfo>()
+    
+    // 通知辅助类
+    private val notificationHelper = NotificationHelper(application)
     
     // MOTD 和服务器消息收集
     private val serverMessageBuffer = mutableListOf<String>()
@@ -127,7 +132,7 @@ class HomeViewModel : ViewModel() {
                 client.sendMessage(channel, message)
                 // 获取当前昵称，如果为空则使用"Me"
                 val currentNick = client.nickname.takeIf { it.isNotBlank() } ?: "Me"
-                addMessage(currentNick, message)
+                addMessage(currentNick, message, isOwn = true)
             } catch (e: Exception) {
                 _statusMessage.value = "发送消息失败: ${e.message}"
                 addSystemMessage("发送消息失败: ${e.message}")
@@ -162,6 +167,16 @@ class HomeViewModel : ViewModel() {
             message.isPrivMsg() -> {
                 val sender = message.getSenderNick()
                 val text = message.trailing
+                val currentNick = ircClient?.nickname ?: ""
+                
+                // 检查是否提及当前用户
+                if (currentNick.isNotBlank() && 
+                    notificationHelper.isMentioned(text, currentNick)) {
+                    // 发送通知
+                    val channel = _currentChannel.value ?: "未知频道"
+                    notificationHelper.showMentionNotification(sender, text, channel)
+                }
+                
                 addMessage(sender, text)
             }
             message.command == "JOIN" -> {
@@ -342,25 +357,34 @@ class HomeViewModel : ViewModel() {
         _messages.postValue(currentList)
     }
     
-    private fun addMessage(sender: String, message: String, isSystem: Boolean = false) {
+    private fun addMessage(sender: String, message: String, isSystem: Boolean = false, isOwn: Boolean = false) {
         val currentList = _messages.value ?: mutableListOf()
         currentList.add(
             ChatMessage(
                 sender = sender,
                 message = message,
                 timestamp = dateFormat.format(Date()),
-                isSystemMessage = isSystem
+                isSystemMessage = isSystem,
+                isOwnMessage = isOwn
             )
         )
         _messages.postValue(currentList)
     }
     
     private fun addSystemMessage(message: String) {
-        addMessage("系统", message, true)
+        addMessage("系统", message, isSystem = true)
+    }
+    
+    /**
+     * 清除所有通知
+     */
+    fun clearNotifications() {
+        notificationHelper.cancelAllNotifications()
     }
     
     override fun onCleared() {
         super.onCleared()
         ircClient?.disconnect()
+        notificationHelper.cancelAllNotifications()
     }
 }
