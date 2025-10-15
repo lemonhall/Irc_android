@@ -125,10 +125,11 @@ class HomeFragment : Fragment() {
         
         // 消息列表
         homeViewModel.messages.observe(viewLifecycleOwner) { messages ->
-            messageAdapter.submitList(messages.toList())
-            // 滚动到最新消息
-            if (messages.isNotEmpty()) {
-                recyclerMessages.scrollToPosition(messages.size - 1)
+            messageAdapter.submitList(messages.toList()) {
+                // 在列表更新完成后滚动到底部
+                if (messages.isNotEmpty()) {
+                    recyclerMessages.smoothScrollToPosition(messages.size - 1)
+                }
             }
         }
         
