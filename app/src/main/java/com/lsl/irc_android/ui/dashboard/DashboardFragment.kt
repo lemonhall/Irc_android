@@ -34,6 +34,9 @@ class DashboardFragment : Fragment() {
         dashboardViewModel = ViewModelProvider(this)[DashboardViewModel::class.java]
         homeViewModel = ViewModelProvider(requireActivity())[HomeViewModel::class.java]
         
+        // 连接 ViewModels
+        dashboardViewModel.setHomeViewModel(homeViewModel)
+        
         initViews(root)
         setupRecyclerView()
         setupObservers()
@@ -74,7 +77,6 @@ class DashboardFragment : Fragment() {
     private fun setupButtons() {
         btnRefresh.setOnClickListener {
             dashboardViewModel.refreshChannels()
-            Toast.makeText(context, "刷新功能待实现", Toast.LENGTH_SHORT).show()
         }
     }
     

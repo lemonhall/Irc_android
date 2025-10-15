@@ -142,6 +142,13 @@ class IrcClient(
     }
     
     /**
+     * 请求频道列表
+     */
+    suspend fun requestChannelList() {
+        sendRaw("LIST\r\n")
+    }
+    
+    /**
      * 发送消息到频道或用户
      */
     suspend fun sendMessage(target: String, message: String) {

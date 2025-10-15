@@ -30,8 +30,13 @@ class HomeViewModel : ViewModel() {
     private val _currentChannel = MutableLiveData<String?>()
     val currentChannel: LiveData<String?> = _currentChannel
     
+    // 频道列表数据
+    private val _channelList = MutableLiveData<List<ChannelInfo>>()
+    val channelList: LiveData<List<ChannelInfo>> = _channelList
+    
     private var ircClient: IrcClient? = null
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private val channelListBuffer = mutableListOf<ChannelInfo>()
     
     fun connect(server: String, port: Int, nickname: String) {
         _connectionState.value = ConnectionState.CONNECTING
@@ -125,6 +130,28 @@ class HomeViewModel : ViewModel() {
         }
     }
     
+    /**
+     * 请求频道列表
+     */
+    fun requestChannelList() {
+        val client = ircClient
+        if (client == null || !client.isConnected()) {
+            _statusMessage.value = "未连接到服务器"
+            return
+        }
+        
+        viewModelScope.launch {
+            try {
+                channelListBuffer.clear()
+                client.requestChannelList()
+                addSystemMessage("正在获取频道列表...")
+            } catch (e: Exception) {
+                _statusMessage.value = "获取频道列表失败: ${e.message}"
+                addSystemMessage("获取频道列表失败: ${e.message}")
+            }
+        }
+    }
+    
     private fun handleIrcMessage(message: IrcMessage) {
         when {
             message.isPrivMsg() -> {
@@ -172,6 +199,21 @@ class HomeViewModel : ViewModel() {
             1 -> {
                 addSystemMessage("[+] 欢迎: $text")
                 _statusMessage.postValue("已登录")
+            }
+            322 -> {
+                // RPL_LIST - 频道列表项
+                // :server 322 nickname #channel usercount :topic
+                if (message.params.size >= 3) {
+                    val channel = message.params[1]
+                    val userCount = message.params[2].toIntOrNull() ?: 0
+                    val topic = text
+                    channelListBuffer.add(ChannelInfo(channel, userCount, topic))
+                }
+            }
+            323 -> {
+                // RPL_LISTEND - 频道列表结束
+                _channelList.postValue(channelListBuffer.toList())
+                addSystemMessage("[频道] 找到 ${channelListBuffer.size} 个频道")
             }
             332 -> {
                 if (message.params.size >= 2) {
