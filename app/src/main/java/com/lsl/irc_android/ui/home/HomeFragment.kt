@@ -20,15 +20,9 @@ class HomeFragment : Fragment() {
     private lateinit var messageAdapter: ChatMessageAdapter
     
     // UI 组件
-    private lateinit var editServer: TextInputEditText
-    private lateinit var editPort: TextInputEditText
-    private lateinit var editNickname: TextInputEditText
-    private lateinit var editChannel: TextInputEditText
     private lateinit var editMessage: TextInputEditText
-    private lateinit var btnConnect: Button
-    private lateinit var btnJoinChannel: Button
     private lateinit var btnSend: Button
-    private lateinit var textStatus: TextView
+    private lateinit var textCurrentChannel: TextView
     private lateinit var recyclerMessages: RecyclerView
 
     override fun onCreateView(
@@ -38,7 +32,7 @@ class HomeFragment : Fragment() {
     ): View? {
         val root = inflater.inflate(R.layout.fragment_home, container, false)
         
-        homeViewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
+        homeViewModel = ViewModelProvider(requireActivity())[HomeViewModel::class.java]
         
         initViews(root)
         setupRecyclerView()
@@ -52,15 +46,9 @@ class HomeFragment : Fragment() {
      * 初始化视图
      */
     private fun initViews(root: View) {
-        editServer = root.findViewById(R.id.edit_server)
-        editPort = root.findViewById(R.id.edit_port)
-        editNickname = root.findViewById(R.id.edit_nickname)
-        editChannel = root.findViewById(R.id.edit_channel)
         editMessage = root.findViewById(R.id.edit_message)
-        btnConnect = root.findViewById(R.id.btn_connect)
-        btnJoinChannel = root.findViewById(R.id.btn_join_channel)
         btnSend = root.findViewById(R.id.btn_send)
-        textStatus = root.findViewById(R.id.text_status)
+        textCurrentChannel = root.findViewById(R.id.text_current_channel)
         recyclerMessages = root.findViewById(R.id.recycler_messages)
     }
     
@@ -79,36 +67,6 @@ class HomeFragment : Fragment() {
      * 设置按钮事件
      */
     private fun setupButtons() {
-        // 连接按钮
-        btnConnect.setOnClickListener {
-            val server = editServer.text.toString()
-            val port = editPort.text.toString().toIntOrNull() ?: 6667
-            val nickname = editNickname.text.toString()
-            
-            if (server.isBlank() || nickname.isBlank()) {
-                textStatus.text = "请填写服务器和昵称"
-                return@setOnClickListener
-            }
-            
-            when (homeViewModel.connectionState.value) {
-                ConnectionState.DISCONNECTED, ConnectionState.ERROR -> {
-                    homeViewModel.connect(server, port, nickname)
-                }
-                ConnectionState.CONNECTED -> {
-                    homeViewModel.disconnect()
-                }
-                else -> {}
-            }
-        }
-        
-        // 加入频道按钮
-        btnJoinChannel.setOnClickListener {
-            val channel = editChannel.text.toString()
-            if (channel.isNotBlank()) {
-                homeViewModel.joinChannel(channel)
-            }
-        }
-        
         // 发送按钮
         btnSend.setOnClickListener {
             sendMessage()
@@ -144,41 +102,19 @@ class HomeFragment : Fragment() {
         homeViewModel.connectionState.observe(viewLifecycleOwner) { state ->
             when (state) {
                 ConnectionState.DISCONNECTED -> {
-                    btnConnect.text = "连接"
-                    btnConnect.isEnabled = true
-                    btnJoinChannel.isEnabled = false
                     btnSend.isEnabled = false
-                    
-                    // 启用连接设置
-                    editServer.isEnabled = true
-                    editPort.isEnabled = true
-                    editNickname.isEnabled = true
+                    textCurrentChannel.text = "当前频道: 未连接"
                 }
                 ConnectionState.CONNECTING -> {
-                    btnConnect.text = "连接中..."
-                    btnConnect.isEnabled = false
-                    
-                    // 禁用连接设置
-                    editServer.isEnabled = false
-                    editPort.isEnabled = false
-                    editNickname.isEnabled = false
+                    btnSend.isEnabled = false
+                    textCurrentChannel.text = "当前频道: 连接中..."
                 }
                 ConnectionState.CONNECTED -> {
-                    btnConnect.text = "断开"
-                    btnConnect.isEnabled = true
-                    btnJoinChannel.isEnabled = true
                     btnSend.isEnabled = true
                 }
                 ConnectionState.ERROR -> {
-                    btnConnect.text = "连接"
-                    btnConnect.isEnabled = true
-                    btnJoinChannel.isEnabled = false
                     btnSend.isEnabled = false
-                    
-                    // 启用连接设置
-                    editServer.isEnabled = true
-                    editPort.isEnabled = true
-                    editNickname.isEnabled = true
+                    textCurrentChannel.text = "当前频道: 连接错误"
                 }
                 else -> {}
             }
@@ -193,15 +129,25 @@ class HomeFragment : Fragment() {
             }
         }
         
-        // 状态消息
+        // 状态消息 - 显示在当前频道信息中
         homeViewModel.statusMessage.observe(viewLifecycleOwner) { status ->
-            textStatus.text = status
+            val channel = homeViewModel.currentChannel.value
+            if (channel != null) {
+                textCurrentChannel.text = "📢 $channel | $status"
+            } else {
+                textCurrentChannel.text = "📢 $status"
+            }
         }
         
         // 当前频道
         homeViewModel.currentChannel.observe(viewLifecycleOwner) { channel ->
+            val status = homeViewModel.statusMessage.value ?: "未连接"
             if (channel != null) {
-                editChannel.setText(channel)
+                textCurrentChannel.text = "📢 $channel | $status"
+                btnSend.isEnabled = homeViewModel.connectionState.value == ConnectionState.CONNECTED
+            } else {
+                textCurrentChannel.text = "📢 $status"
+                btnSend.isEnabled = false
             }
         }
     }

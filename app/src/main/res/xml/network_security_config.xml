@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 允许IRC服务器的明文连接 -->
+        <domain includeSubdomains="true">irc.libera.chat</domain>
+        <domain includeSubdomains="true">irc.freenode.net</domain>
+        <domain includeSubdomains="true">chat.freenode.net</domain>
+        <domain includeSubdomains="true">irc.oftc.net</domain>
+        <domain includeSubdomains="true">irc.rizon.net</domain>
+        <!-- 允许所有IRC服务器（用于测试，生产环境应该限制） -->
+        <domain includeSubdomains="true">*.irc.*</domain>
+    </domain-config>
+    
+    <!-- 开发调试模式下允许所有明文连接 -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
