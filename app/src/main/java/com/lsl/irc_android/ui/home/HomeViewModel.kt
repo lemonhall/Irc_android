@@ -1,10 +1,12 @@
 package com.lsl.irc_android.ui.home
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.lsl.irc_android.data.ImageUploadManager
 import com.lsl.irc_android.irc.IrcClient
 import com.lsl.irc_android.irc.IrcMessage
 import com.lsl.irc_android.notification.NotificationHelper
@@ -42,6 +44,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     // 通知辅助类
     private val notificationHelper = NotificationHelper(application)
+    
+    // 图片上传管理器
+    private val imageUploadManager = ImageUploadManager(application)
+    
+    // 图片上传状态
+    private val _uploadingImage = MutableLiveData<Boolean>().apply {
+        value = false
+    }
+    val uploadingImage: LiveData<Boolean> = _uploadingImage
+    
+    // 上传后的图片 URL
+    private val _uploadedImageUrl = MutableLiveData<String?>()
+    val uploadedImageUrl: LiveData<String?> = _uploadedImageUrl
     
     // MOTD 和服务器消息收集
     private val serverMessageBuffer = mutableListOf<String>()
@@ -382,9 +397,108 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         notificationHelper.cancelAllNotifications()
     }
     
+    /**
+     * 处理相机拍照后的图片
+     *
+     * @param imageUri 拍照后的图片 URI
+     * @param uploadUrl 图床上传 URL（如 https://api.imgbb.com/1/upload）
+     * @param apiKey 图床 API Key（如有需要）
+     */
+    fun handleCameraImage(
+        imageUri: Uri,
+        uploadUrl: String,
+        apiKey: String? = null
+    ) {
+        val channel = _currentChannel.value
+        if (channel == null) {
+            _statusMessage.value = "请先加入一个频道"
+            return
+        }
+        
+        _uploadingImage.value = true
+        
+        viewModelScope.launch {
+            try {
+                // 第一步：保存图片到缓存
+                val imageFile = imageUploadManager.saveImageFromUri(imageUri)
+                if (imageFile == null) {
+                    _statusMessage.postValue("保存图片失败")
+                    _uploadingImage.postValue(false)
+                    return@launch
+                }
+                
+                // 第二步：上传到图床
+                val imageUrl = imageUploadManager.uploadImageToHost(imageFile, uploadUrl, apiKey)
+                
+                if (imageUrl != null && imageUrl.isNotBlank()) {
+                    _uploadedImageUrl.postValue(imageUrl)
+                    _statusMessage.postValue("图片上传成功: $imageUrl")
+                    addSystemMessage("📷 图片上传成功: $imageUrl")
+                    // 自动在文本框中插入图片链接
+                } else {
+                    _statusMessage.postValue("上传图片到图床失败")
+                    _uploadedImageUrl.postValue(null)
+                    addSystemMessage("❌ 上传图片失败")
+                }
+            } catch (e: Exception) {
+                _statusMessage.postValue("处理图片失败: ${e.message}")
+                _uploadedImageUrl.postValue(null)
+                addSystemMessage("❌ 错误: ${e.message}")
+            } finally {
+                _uploadingImage.postValue(false)
+            }
+        }
+    }
+    
+    /**
+     * 直接发送包含图片链接的消息
+     *
+     * @param message 文本内容
+     * @param imageUrl 图片 URL（可选）
+     */
+    fun sendMessageWithImage(message: String, imageUrl: String? = null) {
+        val channel = _currentChannel.value
+        if (channel == null) {
+            _statusMessage.value = "请先加入一个频道"
+            return
+        }
+        
+        val client = ircClient
+        if (client == null || !client.isConnected()) {
+            _statusMessage.value = "未连接到服务器"
+            return
+        }
+        
+        // 使用 Markdown 格式添加图片：![image](url)
+        // 图片链接始终放在消息的最前面，便于 bot 解析
+        val finalMessage = if (imageUrl != null && imageUrl.isNotBlank()) {
+            val imageMarkdown = "![图片]($imageUrl)"
+            if (message.isNotBlank()) {
+                "$imageMarkdown $message"
+            } else {
+                imageMarkdown
+            }
+        } else {
+            message
+        }
+        
+        viewModelScope.launch {
+            try {
+                client.sendMessage(channel, finalMessage)
+                val currentNick = client.nickname.takeIf { it.isNotBlank() } ?: "Me"
+                addMessage(currentNick, finalMessage, isOwn = true)
+                _uploadedImageUrl.postValue(null)
+            } catch (e: Exception) {
+                _statusMessage.postValue("发送消息失败: ${e.message}")
+                addSystemMessage("发送消息失败: ${e.message}")
+            }
+        }
+    }
+    
     override fun onCleared() {
         super.onCleared()
         ircClient?.disconnect()
         notificationHelper.cancelAllNotifications()
+        imageUploadManager.cleanCacheImages()
     }
 }

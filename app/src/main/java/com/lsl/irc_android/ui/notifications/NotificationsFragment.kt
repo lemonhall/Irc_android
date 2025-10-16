@@ -24,6 +24,8 @@ class NotificationsFragment : Fragment() {
     private lateinit var editPort: TextInputEditText
     private lateinit var editNickname: TextInputEditText
     private lateinit var editChannel: TextInputEditText
+    private lateinit var editImageHost: TextInputEditText
+    private lateinit var editApiKey: TextInputEditText
     private lateinit var btnSave: Button
     private lateinit var btnReset: Button
     private lateinit var btnConnect: Button
@@ -56,6 +58,8 @@ class NotificationsFragment : Fragment() {
         editPort = root.findViewById(R.id.edit_port)
         editNickname = root.findViewById(R.id.edit_nickname)
         editChannel = root.findViewById(R.id.edit_channel)
+        editImageHost = root.findViewById(R.id.edit_image_host)
+        editApiKey = root.findViewById(R.id.edit_api_key)
         btnSave = root.findViewById(R.id.btn_save)
         btnReset = root.findViewById(R.id.btn_reset)
         btnConnect = root.findViewById(R.id.btn_connect)
@@ -73,6 +77,8 @@ class NotificationsFragment : Fragment() {
             val port = editPort.text.toString()
             val nickname = editNickname.text.toString()
             val channel = editChannel.text.toString()
+            val imageHost = editImageHost.text.toString()
+            val apiKey = editApiKey.text.toString()
             
             if (server.isBlank()) {
                 Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
@@ -84,6 +90,17 @@ class NotificationsFragment : Fragment() {
             }
             
             notificationsViewModel.saveConfig(server, port, nickname, channel)
+            
+            // 保存图床配置
+            val configManager = com.lsl.irc_android.data.IrcConfigManager(requireContext())
+            if (imageHost.isNotBlank()) {
+                configManager.saveImageHost(imageHost)
+            }
+            if (apiKey.isNotBlank()) {
+                configManager.saveApiKey(apiKey)
+            }
+            
+            Toast.makeText(context, "设置已保存", Toast.LENGTH_SHORT).show()
         }
         
         // 重置设置
@@ -172,12 +189,17 @@ class NotificationsFragment : Fragment() {
      * 加载当前配置
      */
     private fun loadCurrentConfig() {
-        // 触发配置加载
+        // 加载 IRC 配置
         notificationsViewModel.config.value?.let { config ->
             editServer.setText(config.server)
             editPort.setText(config.port.toString())
             editNickname.setText(config.nickname)
             editChannel.setText(config.channel)
         }
+        
+        // 加载图床配置
+        val configManager = com.lsl.irc_android.data.IrcConfigManager(requireContext())
+        editImageHost.setText(configManager.imageHost)
+        editApiKey.setText(configManager.apiKey)
     }
 }

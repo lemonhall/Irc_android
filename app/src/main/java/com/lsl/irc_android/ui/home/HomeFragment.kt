@@ -1,6 +1,7 @@
 package com.lsl.irc_android.ui.home
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -28,6 +29,7 @@ class HomeFragment : Fragment() {
     // UI 组件
     private lateinit var editMessage: TextInputEditText
     private lateinit var btnSend: Button
+    private lateinit var btnCamera: Button
     private lateinit var textCurrentChannel: TextView
     private lateinit var recyclerMessages: RecyclerView
     
@@ -41,6 +43,45 @@ class HomeFragment : Fragment() {
             Toast.makeText(context, "通知权限被拒绝，将无法收到提及通知", Toast.LENGTH_LONG).show()
         }
     }
+    
+    // 相机权限请求
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            launchCamera()
+        } else {
+            Toast.makeText(context, "相机权限被拒绝，无法拍照", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    // 读写存储权限请求
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true ||
+            permissions[Manifest.permission.WRITE_EXTERNAL_STORAGE] == true
+        ) {
+            Toast.makeText(context, "存储权限已授予", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    // 拍照返回结果处理
+    private val takePictureLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            photoUri?.let { uri ->
+                // 这里应该调用 ViewModel 上传图片
+                // 需要在 Fragment 中配置图床 URL 和 API Key
+                showImageUploadDialog(uri)
+            }
+        } else {
+            Toast.makeText(context, "拍照失败或已取消", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private var photoUri: android.net.Uri? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -95,6 +136,7 @@ class HomeFragment : Fragment() {
     private fun initViews(root: View) {
         editMessage = root.findViewById(R.id.edit_message)
         btnSend = root.findViewById(R.id.btn_send)
+        btnCamera = root.findViewById(R.id.btn_camera)
         textCurrentChannel = root.findViewById(R.id.text_current_channel)
         recyclerMessages = root.findViewById(R.id.recycler_messages)
     }
@@ -117,6 +159,11 @@ class HomeFragment : Fragment() {
      * 设置按钮事件
      */
     private fun setupButtons() {
+        // 拍照按钮
+        btnCamera.setOnClickListener {
+            requestCameraPermissionAndTakePicture()
+        }
+        
         // 发送按钮
         btnSend.setOnClickListener {
             sendMessage()
@@ -153,17 +200,21 @@ class HomeFragment : Fragment() {
             when (state) {
                 ConnectionState.DISCONNECTED -> {
                     btnSend.isEnabled = false
+                    btnCamera.isEnabled = false
                     textCurrentChannel.text = "当前频道: 未连接"
                 }
                 ConnectionState.CONNECTING -> {
                     btnSend.isEnabled = false
+                    btnCamera.isEnabled = false
                     textCurrentChannel.text = "当前频道: 连接中..."
                 }
                 ConnectionState.CONNECTED -> {
                     btnSend.isEnabled = true
+                    btnCamera.isEnabled = true
                 }
                 ConnectionState.ERROR -> {
                     btnSend.isEnabled = false
+                    btnCamera.isEnabled = false
                     textCurrentChannel.text = "当前频道: 连接错误"
                 }
                 else -> {}
@@ -196,11 +247,111 @@ class HomeFragment : Fragment() {
             if (channel != null) {
                 textCurrentChannel.text = "📢 $channel | $status"
                 btnSend.isEnabled = homeViewModel.connectionState.value == ConnectionState.CONNECTED
+                btnCamera.isEnabled = homeViewModel.connectionState.value == ConnectionState.CONNECTED
             } else {
                 textCurrentChannel.text = "📢 $status"
                 btnSend.isEnabled = false
+                btnCamera.isEnabled = false
             }
         }
+        
+        // 图片上传状态
+        homeViewModel.uploadingImage.observe(viewLifecycleOwner) { isUploading ->
+            btnSend.isEnabled = !isUploading && homeViewModel.connectionState.value == ConnectionState.CONNECTED
+            btnCamera.isEnabled = !isUploading && homeViewModel.connectionState.value == ConnectionState.CONNECTED
+        }
+        
+        // 上传后的图片 URL
+        homeViewModel.uploadedImageUrl.observe(viewLifecycleOwner) { imageUrl ->
+            if (imageUrl != null && imageUrl.isNotBlank()) {
+                // 使用 Markdown 格式，链接始终添加到最前面
+                val imageMarkdown = "![图片]($imageUrl) "
+                val currentText = editMessage.text.toString()
+                val newText = imageMarkdown + currentText
+                editMessage.setText(newText)
+                editMessage.setSelection(imageMarkdown.length)
+            }
+        }
+    }
+    
+    /**
+     * 请求相机权限并拍照
+     */
+    private fun requestCameraPermissionAndTakePicture() {
+        when {
+            ContextCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                launchCamera()
+            }
+            shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> {
+                Toast.makeText(context, "需要相机权限才能拍照", Toast.LENGTH_LONG).show()
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+            else -> {
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
+    }
+    
+    /**
+     * 启动相机拍照
+     */
+    private fun launchCamera() {
+        try {
+            val photoFile = createImageFile()
+            photoUri = androidx.core.content.FileProvider.getUriForFile(
+                requireContext(),
+                "${requireContext().packageName}.fileprovider",
+                photoFile
+            )
+            
+            val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, photoUri)
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            
+            takePictureLauncher.launch(photoUri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法启动相机: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
+     * 创建图片文件
+     */
+    private fun createImageFile(): java.io.File {
+        val storageDir = requireContext().getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+        return java.io.File.createTempFile("IMG_", ".jpg", storageDir)
+    }
+    
+    /**
+     * 显示图片上传对话框
+     */
+    private fun showImageUploadDialog(imageUri: android.net.Uri) {
+        val dialog = android.app.AlertDialog.Builder(requireContext())
+            .setTitle("上传图片")
+            .setMessage("是否要上传此图片到图床？\n\n请确保已在设置中配置图床地址和 API Key。")
+            .setPositiveButton("上传") { _, _ ->
+                // 从 IrcConfigManager 获取图床配置
+                val configManager = com.lsl.irc_android.data.IrcConfigManager(requireContext())
+                val imageHost = configManager.imageHost
+                val apiKey = configManager.apiKey
+                
+                if (imageHost.isBlank()) {
+                    Toast.makeText(
+                        context,
+                        "请先在设置中配置图床地址",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    homeViewModel.handleCameraImage(imageUri, imageHost, apiKey)
+                }
+            }
+            .setNegativeButton("取消", null)
+            .create()
+        dialog.show()
     }
     
     override fun onResume() {

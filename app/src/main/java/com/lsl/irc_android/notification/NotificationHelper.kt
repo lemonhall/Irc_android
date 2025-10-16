@@ -30,7 +30,12 @@ class NotificationHelper(private val context: Context) {
     }
 
     private val notificationManager = NotificationManagerCompat.from(context)
-    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    private val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        context.getSystemService(Vibrator::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    }
 
     init {
         createNotificationChannel()

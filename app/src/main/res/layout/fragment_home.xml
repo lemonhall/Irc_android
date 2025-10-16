@@ -63,6 +63,16 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
+            <Button
+                android:id="@+id/btn_camera"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📷"
+                android:contentDescription="拍照"
+                android:minHeight="48dp"
+                android:minWidth="48dp"
+                android:layout_marginEnd="4dp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

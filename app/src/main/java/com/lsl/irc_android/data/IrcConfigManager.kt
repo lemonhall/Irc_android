@@ -16,6 +16,8 @@ class IrcConfigManager(context: Context) {
         private const val KEY_PORT = "port"
         private const val KEY_NICKNAME = "nickname"
         private const val KEY_CHANNEL = "channel"
+        private const val KEY_IMAGE_HOST = "image_host"
+        private const val KEY_API_KEY = "api_key"
     }
     
     /**
@@ -42,4 +44,30 @@ class IrcConfigManager(context: Context) {
             channel = prefs.getString(KEY_CHANNEL, "ai-collab-test") ?: "ai-collab-test"
         )
     }
+    
+    /**
+     * 保存图床地址
+     */
+    fun saveImageHost(url: String) {
+        prefs.edit().putString(KEY_IMAGE_HOST, url).apply()
+    }
+    
+    /**
+     * 获取图床地址
+     */
+    val imageHost: String
+        get() = prefs.getString(KEY_IMAGE_HOST, "") ?: ""
+    
+    /**
+     * 保存图床 API Key
+     */
+    fun saveApiKey(key: String) {
+        prefs.edit().putString(KEY_API_KEY, key).apply()
+    }
+    
+    /**
+     * 获取图床 API Key
+     */
+    val apiKey: String
+        get() = prefs.getString(KEY_API_KEY, "") ?: ""
 }
