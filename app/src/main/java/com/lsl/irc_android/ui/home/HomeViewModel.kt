@@ -380,7 +380,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 message = message,
                 timestamp = dateFormat.format(Date()),
                 isSystemMessage = isSystem,
-                isOwnMessage = isOwn
+                isOwnMessage = isOwn,
+                imageUrl = extractImageUrl(message)  // 提取图片 URL
             )
         )
         _messages.postValue(currentList)
@@ -388,6 +389,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     private fun addSystemMessage(message: String) {
         addMessage("系统", message, isSystem = true)
+    }
+    
+    /**
+     * 从 Markdown 格式的消息中提取图片 URL
+     * 格式：![description](url)
+     */
+    private fun extractImageUrl(message: String): String? {
+        return try {
+            val pattern = "!\\[.*?\\]\\((https?://[^)]+)\\)".toRegex()
+            val matchResult = pattern.find(message)
+            matchResult?.groupValues?.get(1)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
     
     /**

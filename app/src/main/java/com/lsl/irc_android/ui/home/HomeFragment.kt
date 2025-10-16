@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.textfield.TextInputEditText
@@ -145,10 +146,13 @@ class HomeFragment : Fragment() {
      * 设置 RecyclerView
      */
     private fun setupRecyclerView() {
-        messageAdapter = ChatMessageAdapter { messageId ->
-            // 点击服务器消息时切换展开/折叠状态
-            homeViewModel.toggleServerMessage(messageId)
-        }
+        messageAdapter = ChatMessageAdapter(
+            { messageId ->
+                // 点击服务器消息时切换展开/折叠状态
+                homeViewModel.toggleServerMessage(messageId)
+            },
+            lifecycleScope  // 传入 lifecycleScope 用于图片加载
+        )
         recyclerMessages.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = messageAdapter

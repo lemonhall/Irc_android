@@ -35,4 +35,15 @@
         android:textSize="14sp"
         android:textColor="?android:attr/textColorPrimary" />
 
+    <!-- 聊天消息中的图片 -->
+    <ImageView
+        android:id="@+id/image_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:visibility="gone"
+        android:contentDescription="聊天消息中的图片" />
+
 </LinearLayout>
